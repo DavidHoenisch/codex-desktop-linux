@@ -21,6 +21,7 @@ const {
   applyBrowserUseNodeReplApprovalPatch,
   applyLinuxChromeExtensionStatusPatch,
   applyLinuxExplicitIpcQuitPatch,
+  applyLinuxExplicitQuitPromptBypassPatch,
   applyLinuxExplicitTrayQuitPatch,
   applyLinuxFileManagerPatch,
   applyLinuxGitOriginsSourceFallbackPatch,
@@ -30,6 +31,7 @@ const {
   applyLinuxSetIconPatch,
   applyLinuxSingleInstancePatch,
   applyLinuxTrayPatch,
+  applyLinuxWillQuitDrainTimeoutPatch,
   applyLinuxWindowOptionsPatch,
 } = require("./main-process.js");
 const {
@@ -70,6 +72,16 @@ const MAIN_BUNDLE_PATCHES = [
     name: "linux-quit-guard",
     ciPolicy: REQUIRED_UPSTREAM,
     apply: (source) => applyLinuxQuitGuardPatch(source),
+  },
+  {
+    name: "linux-explicit-quit-prompt-bypass",
+    ciPolicy: REQUIRED_UPSTREAM,
+    apply: (source) => applyLinuxExplicitQuitPromptBypassPatch(source),
+  },
+  {
+    name: "linux-explicit-quit-drain-timeout",
+    ciPolicy: REQUIRED_UPSTREAM,
+    apply: (source) => applyLinuxWillQuitDrainTimeoutPatch(source),
   },
   {
     name: "linux-explicit-tray-quit",

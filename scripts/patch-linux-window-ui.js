@@ -38,6 +38,7 @@ const {
   applyBrowserUseNodeReplApprovalPatch,
   applyLinuxChromeExtensionStatusPatch,
   applyLinuxExplicitIpcQuitPatch,
+  applyLinuxExplicitQuitPromptBypassPatch,
   applyLinuxExplicitTrayQuitPatch,
   applyLinuxFileManagerPatch,
   applyLinuxGitOriginsSourceFallbackPatch,
@@ -47,6 +48,7 @@ const {
   applyLinuxSetIconPatch,
   applyLinuxSingleInstancePatch,
   applyLinuxTrayPatch,
+  applyLinuxWillQuitDrainTimeoutPatch,
   applyLinuxWindowOptionsPatch,
 } = require("./patches/main-process.js");
 const {
@@ -120,6 +122,7 @@ module.exports = {
   applyLinuxComputerUsePluginGatePatch,
   applyLinuxComputerUseRendererAvailabilityPatch,
   applyLinuxExplicitIpcQuitPatch,
+  applyLinuxExplicitQuitPromptBypassPatch,
   applyLinuxExplicitTrayQuitPatch,
   applyLinuxFileManagerPatch,
   applyLinuxGitOriginsSourceFallbackPatch,
@@ -135,6 +138,7 @@ module.exports = {
   applyLinuxSingleInstancePatch,
   applyLinuxTrayCloseSettingPatch,
   applyLinuxTrayPatch,
+  applyLinuxWillQuitDrainTimeoutPatch,
   applyLinuxWindowOptionsPatch,
   createPatchReport,
   isComputerUseUiEnabled,

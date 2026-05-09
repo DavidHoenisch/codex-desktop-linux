@@ -366,13 +366,18 @@ function applyLinuxQuitGuardPatch(currentSource) {
   let patchedSource = currentSource;
 
   const quitGuardNeedle = "let n=require(`electron`),i=require(`node:path`),o=require(`node:fs`);";
-  const quitGuardPatch =
-    "let n=require(`electron`),i=require(`node:path`),o=require(`node:fs`);let codexLinuxQuitInProgress=!1,codexLinuxMarkQuitInProgress=()=>{codexLinuxQuitInProgress=!0},codexLinuxIsQuitInProgress=()=>codexLinuxQuitInProgress===!0;";
-  const quitGuardSuffix =
+  const legacyQuitGuardSuffix =
     "let codexLinuxQuitInProgress=!1,codexLinuxMarkQuitInProgress=()=>{codexLinuxQuitInProgress=!0},codexLinuxIsQuitInProgress=()=>codexLinuxQuitInProgress===!0;";
+  const quitGuardSuffix =
+    "let codexLinuxQuitInProgress=!1,codexLinuxExplicitQuitApproved=!1,codexLinuxExplicitQuitDrainTimeoutMs=3e3,codexLinuxMarkQuitInProgress=()=>{codexLinuxQuitInProgress=!0},codexLinuxPrepareForExplicitQuit=()=>{codexLinuxExplicitQuitApproved=!0,codexLinuxMarkQuitInProgress()},codexLinuxShouldBypassQuitPrompt=()=>codexLinuxExplicitQuitApproved===!0,codexLinuxIsQuitInProgress=()=>codexLinuxQuitInProgress===!0;";
+  const quitGuardPatch = `${quitGuardNeedle}${quitGuardSuffix}`;
 
-  if (patchedSource.includes("codexLinuxQuitInProgress=!1,codexLinuxMarkQuitInProgress=()=>{codexLinuxQuitInProgress=!0},codexLinuxIsQuitInProgress=()=>codexLinuxQuitInProgress===!0;")) {
+  if (patchedSource.includes("codexLinuxExplicitQuitApproved=!1")) {
     return patchedSource;
+  }
+
+  if (patchedSource.includes(legacyQuitGuardSuffix)) {
+    return patchedSource.replace(legacyQuitGuardSuffix, quitGuardSuffix);
   }
 
   if (patchedSource.includes(quitGuardNeedle)) {
@@ -398,11 +403,89 @@ function applyLinuxQuitGuardPatch(currentSource) {
   return patchedSource;
 }
 
+function linuxExplicitQuitExpression() {
+  return "typeof codexLinuxPrepareForExplicitQuit===`function`?codexLinuxPrepareForExplicitQuit():typeof codexLinuxMarkQuitInProgress===`function`&&codexLinuxMarkQuitInProgress(),";
+}
+
+function applyLinuxWillQuitDrainTimeoutPatch(currentSource) {
+  let patchedSource = currentSource;
+
+  const explicitQuitDrainGuard =
+    "process.platform===`linux`&&(typeof codexLinuxIsQuitInProgress===`function`&&codexLinuxIsQuitInProgress())";
+  const originalDrainSnippet =
+    "Promise.all([...u.values()].map(e=>e.flush())).finally(()=>{d(),f.dispose(),n.app.quit()})";
+  const patchedDrainSnippet =
+    "(()=>{let codexLinuxFinalizeQuit=()=>{d(),f.dispose(),n.app.quit()},codexLinuxDrainPromise=Promise.all([...u.values()].map(e=>e.flush()));" +
+    `if(${explicitQuitDrainGuard}){Promise.race([codexLinuxDrainPromise,new Promise(e=>setTimeout(e,typeof codexLinuxExplicitQuitDrainTimeoutMs===\\\`number\\\`?codexLinuxExplicitQuitDrainTimeoutMs:3e3))]).finally(codexLinuxFinalizeQuit);return}` +
+    "codexLinuxDrainPromise.finally(codexLinuxFinalizeQuit)})()";
+
+  if (patchedSource.includes("codexLinuxDrainPromise=Promise.all([...u.values()].map(e=>e.flush()))")) {
+    return patchedSource;
+  }
+
+  if (patchedSource.includes(originalDrainSnippet)) {
+    return patchedSource.replace(originalDrainSnippet, patchedDrainSnippet);
+  }
+
+  const drainRegex =
+    /Promise\.all\(\[\.\.\.([A-Za-z_$][\w$]*)\.values\(\)\]\.map\(e=>e\.flush\(\)\)\)\.finally\(\(\)=>\{([A-Za-z_$][\w$]*)\(\),([A-Za-z_$][\w$]*)\.dispose\(\),([A-Za-z_$][\w$]*)\.app\.quit\(\)\}\)/;
+  if (drainRegex.test(patchedSource)) {
+    patchedSource = patchedSource.replace(
+      drainRegex,
+      (_match, globalStatesVar, flushDisposeVar, disposablesVar, electronVar) =>
+        `(()=>{let codexLinuxFinalizeQuit=()=>{${flushDisposeVar}(),${disposablesVar}.dispose(),${electronVar}.app.quit()},codexLinuxDrainPromise=Promise.all([...${globalStatesVar}.values()].map(e=>e.flush()));if(${explicitQuitDrainGuard}){Promise.race([codexLinuxDrainPromise,new Promise(e=>setTimeout(e,typeof codexLinuxExplicitQuitDrainTimeoutMs===\\\`number\\\`?codexLinuxExplicitQuitDrainTimeoutMs:3e3))]).finally(codexLinuxFinalizeQuit);return}codexLinuxDrainPromise.finally(codexLinuxFinalizeQuit)})()`,
+    );
+  } else if (
+    patchedSource.includes("n.app.on(`will-quit`,") &&
+    patchedSource.includes(".map(e=>e.flush())")
+  ) {
+    console.warn("WARN: Could not find will-quit drain sequence — skipping Linux explicit quit drain timeout patch");
+  }
+
+  return patchedSource;
+}
+
+function applyLinuxExplicitQuitPromptBypassPatch(currentSource) {
+  let patchedSource = currentSource;
+
+  const promptBypassExpression =
+    "(typeof codexLinuxShouldBypassQuitPrompt===`function`&&codexLinuxShouldBypassQuitPrompt())||";
+  const promptBypassGuard = `if(${promptBypassExpression}`;
+  const beforeQuitNeedle =
+    "if(e||i.canQuitWithoutPrompt()||r||!s&&!c){g=!0,a.markAppQuitting();return}";
+  const beforeQuitPatch =
+    `if(${promptBypassExpression}e||i.canQuitWithoutPrompt()||r||!s&&!c){g=!0,a.markAppQuitting();return}`;
+  const beforeQuitRegex =
+    /if\(([A-Za-z_$][\w$]*)\|\|([A-Za-z_$][\w$]*)\.canQuitWithoutPrompt\(\)\|\|([A-Za-z_$][\w$]*)\|\|!([A-Za-z_$][\w$]*)&&!([A-Za-z_$][\w$]*)\)\{([A-Za-z_$][\w$]*)=!0,([A-Za-z_$][\w$]*)\.markAppQuitting\(\);return\}/;
+
+  if (patchedSource.includes(promptBypassGuard)) {
+    return patchedSource;
+  }
+
+  if (patchedSource.includes(beforeQuitNeedle)) {
+    return patchedSource.replace(beforeQuitNeedle, beforeQuitPatch);
+  }
+
+  if (beforeQuitRegex.test(patchedSource)) {
+    patchedSource = patchedSource.replace(
+      beforeQuitRegex,
+      (_match, updateInstallVar, quitControllerVar, appQuittingVar, activeConversationVar, automationVar, quittingStateVar, appQuittingControllerVar) =>
+        `if(${promptBypassExpression}${updateInstallVar}||${quitControllerVar}.canQuitWithoutPrompt()||${appQuittingVar}||!${activeConversationVar}&&!${automationVar}){${quittingStateVar}=!0,${appQuittingControllerVar}.markAppQuitting();return}`,
+    );
+  } else if (
+    patchedSource.includes("showMessageBoxSync({type:`warning`,buttons:[`Quit`,`Cancel`]") &&
+    patchedSource.includes(".canQuitWithoutPrompt()")
+  ) {
+    console.warn("WARN: Could not find before-quit confirmation guard — skipping Linux explicit quit prompt bypass patch");
+  }
+
+  return patchedSource;
+}
+
 function applyLinuxExplicitTrayQuitPatch(currentSource) {
   let patchedSource = currentSource;
 
-  const quitMarkerExpression =
-    "typeof codexLinuxMarkQuitInProgress===`function`&&codexLinuxMarkQuitInProgress(),";
+  const quitMarkerExpression = linuxExplicitQuitExpression();
 
   const trayQuitNeedle = "{label:rB(this.appName),click:()=>{n.app.quit()}}";
   const trayQuitPatch =
@@ -432,8 +515,7 @@ function applyLinuxExplicitTrayQuitPatch(currentSource) {
 function applyLinuxExplicitIpcQuitPatch(currentSource) {
   let patchedSource = currentSource;
 
-  const quitMarkerExpression =
-    "typeof codexLinuxMarkQuitInProgress===`function`&&codexLinuxMarkQuitInProgress(),";
+  const quitMarkerExpression = linuxExplicitQuitExpression();
 
   const quitAppNeedle = "if(o.type===`quit-app`){n.app.quit();return}";
   const quitAppPatch = `if(o.type===\`quit-app\`){${quitMarkerExpression}n.app.quit();return}`;
@@ -828,6 +910,7 @@ module.exports = {
   applyLinuxAvatarOverlayMousePassthroughPatch,
   applyLinuxChromeExtensionStatusPatch,
   applyLinuxExplicitIpcQuitPatch,
+  applyLinuxExplicitQuitPromptBypassPatch,
   applyLinuxExplicitTrayQuitPatch,
   applyLinuxFileManagerPatch,
   applyLinuxGitOriginsSourceFallbackPatch,
@@ -837,5 +920,6 @@ module.exports = {
   applyLinuxSetIconPatch,
   applyLinuxSingleInstancePatch,
   applyLinuxTrayPatch,
+  applyLinuxWillQuitDrainTimeoutPatch,
   applyLinuxWindowOptionsPatch,
 };
