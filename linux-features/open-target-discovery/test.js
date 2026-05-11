@@ -266,6 +266,50 @@ test("open-target discovery respects hidden desktop entry overrides", () => {
   });
 });
 
+test("open-target discovery filters broad non-IDE desktop entries", () => {
+  withTempDir((tmp) => {
+    const dataHome = path.join(tmp, "share");
+    const appsDir = path.join(dataHome, "applications");
+    const binDir = path.join(tmp, "bin");
+    fs.mkdirSync(appsDir, { recursive: true });
+
+    const entries = [
+      ["typora", "Typora", "Markdown Editor", "Office;WordProcessor;"],
+      ["onlyoffice", "ONLYOFFICE", "Document Editor", "Office;WordProcessor;Spreadsheet;Presentation;"],
+      ["gedit", "gedit", "Text Editor", "GNOME;GTK;Utility;TextEditor;"],
+      ["kdenlive", "Kdenlive", "Video Editor", "Qt;KDE;AudioVideo;AudioVideoEditing;"],
+      ["pinta", "Pinta", "Image Editor", "Graphics;2DGraphics;RasterGraphics;GTK;"],
+      ["electron37", "Electron 37", "", "Development;GTK;"],
+      ["cmake-gui", "CMake", "Cross-platform buildsystem", "Development;Building;"],
+      ["codex-desktop", "Codex Desktop", "Run Codex Desktop on Linux", "Development;"],
+      ["stably-orca", "Orca", "Agentic Coding IDE", "Development;IDE;TextEditor;"],
+    ];
+
+    for (const [id, name, genericName, categories] of entries) {
+      makeExecutable(binDir, id);
+      fs.writeFileSync(
+        path.join(appsDir, `${id}.desktop`),
+        [
+          "[Desktop Entry]",
+          "Type=Application",
+          `Name=${name}`,
+          genericName ? `GenericName=${genericName}` : "",
+          `Exec=${path.join(binDir, id)} %U`,
+          `Categories=${categories}`,
+        ].filter(Boolean).join("\n"),
+      );
+    }
+
+    const targets = evaluatePatched(
+      openTargetsBundle,
+      { HOME: tmp, PATH: binDir, XDG_DATA_HOME: dataHome, XDG_DATA_DIRS: path.join(tmp, "empty") },
+      "Xg.flatMap((target)=>{let platform=target.platforms.linux;return platform?[platform.label]:[]})",
+    );
+
+    assert.deepEqual(targets.filter((label) => entries.map((entry) => entry[1]).includes(label)), ["Orca"]);
+  });
+});
+
 test("open-target discovery upgrades the baseline file manager target", async () => {
   await withTempDir(async (tmp) => {
     const binDir = path.join(tmp, "bin");
