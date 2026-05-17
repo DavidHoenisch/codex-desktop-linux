@@ -12,3 +12,8 @@ Keywords=codex;openai;ai;coding;
 StartupNotify=true
 StartupWMClass=codex-desktop
 Icon=codex-desktop
+Actions=NewInstance;
+
+[Desktop Action NewInstance]
+Name=Open New Instance
+Exec=env CODEX_MULTI_LAUNCH=1 @HOME@/.local/bin/codex-desktop %U

@@ -10,7 +10,11 @@ MimeType=x-scheme-handler/codex;x-scheme-handler/codex-browser-sidebar;
 StartupNotify=true
 StartupWMClass=Codex
 X-GNOME-WMClass=Codex
-Actions=CheckForUpdates;InstallReadyUpdate;
+Actions=NewInstance;CheckForUpdates;InstallReadyUpdate;
+
+[Desktop Action NewInstance]
+Name=Open New Instance
+Exec=env CODEX_MULTI_LAUNCH=1 /usr/bin/codex-desktop %u
 
 [Desktop Action CheckForUpdates]
 Name=Check for Updates
