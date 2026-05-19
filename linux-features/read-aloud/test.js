@@ -428,6 +428,15 @@ test("assistant render patch adds an explicit read aloud button under the messag
   assert.match(patched, /\$\.Fragment/);
 });
 
+test("assistant render patch preserves the current JSX runtime alias", () => {
+  const source = "return (0,Q.jsx)(Ov,{item:n,alwaysShowActions:M,assistantCopyText:p,turnId:m,autoReviewStats:y,hookStats:b,completedThreadGoal:x,after:g,conversationId:o,cwd:u,forceCodeBlockWordWrap:V,hasArtifacts:F,onAddSelectedTextToChat:H,onFileLinkOpen:v,onFork:D,renderCodeBlocksAsWritingBlocks:V})";
+  const patched = twice(applyAssistantRenderPatch, source);
+
+  assert.match(patched, /Q\.Fragment/);
+  assert.match(patched, /\(0,Q\.jsx\)\("button"/);
+  assert.match(patched, /globalThis\.codexLinuxReadAloudClick\?\.\(n,p,o,e\.currentTarget\)/);
+});
+
 test("settings patch adds disabled-by-default toggle", () => {
   const source = 'KEYS={promptWindow:"codex-linux-prompt-window-enabled",systemTray:"codex-linux-system-tray-enabled",warmStart:"codex-linux-warm-start-enabled"};$.jsx(LinuxToggle,{settingKey:KEYS.warmStart,label:"Warm start",description:"Use the running app for launch actions instead of starting a fresh Electron instance."})';
   const patched = twice(applySettingsPatch, source);

@@ -192,11 +192,11 @@ function applyAssistantRenderPatch(source) {
     return source;
   }
   const jsxCallPattern =
-    /\(0,\$\.jsx\)\(([A-Za-z_$][\w$]*),\{item:([A-Za-z_$][\w$]*),([^{}]*?)assistantCopyText:([A-Za-z_$][\w$]*),([^{}]*?)conversationId:([A-Za-z_$][\w$]*),([^{}]*?)renderCodeBlocksAsWritingBlocks:([A-Za-z_$][\w$]*)\}\)/g;
+    /\(0,([A-Za-z_$][\w$]*)\.jsx\)\(([A-Za-z_$][\w$]*),\{item:([A-Za-z_$][\w$]*),([^{}]*?)assistantCopyText:([A-Za-z_$][\w$]*),([^{}]*?)conversationId:([A-Za-z_$][\w$]*),([^{}]*?)renderCodeBlocksAsWritingBlocks:([A-Za-z_$][\w$]*)\}\)/g;
   const patched = source.replace(
     jsxCallPattern,
-    (match, _component, itemVar, _beforeCopy, copyVar, _beforeConversation, conversationVar) =>
-      `(0,$.jsxs)($.Fragment,{children:[${match},${readAssistantObserveSource(itemVar, copyVar, conversationVar, propVar(match, "turnId"))}]})`,
+    (match, jsxVar, _component, itemVar, _beforeCopy, copyVar, _beforeConversation, conversationVar) =>
+      `(0,${jsxVar}.jsxs)(${jsxVar}.Fragment,{children:[${match},${readAssistantObserveSource(itemVar, copyVar, conversationVar, propVar(match, "turnId"))}]})`,
   );
   if (patched !== source) {
     return patched;

@@ -1344,6 +1344,15 @@ test("assistant render patch observes assistant text for automatic speech", () =
   assert.match(patched, /\$\.Fragment/);
 });
 
+test("assistant render patch preserves the current JSX runtime alias", () => {
+  const source =
+    "return (0,Q.jsx)(Ov,{item:n,alwaysShowActions:M,assistantCopyText:p,turnId:m,after:g,conversationId:o,cwd:u,renderCodeBlocksAsWritingBlocks:V})";
+  const patched = twice(applyAssistantRenderPatch, source);
+
+  assert.match(patched, /codexLinuxConversationAssistant\?\.\(n,p,o,m,typeof c!="undefined"\?c:null\)/);
+  assert.match(patched, /Q\.Fragment/);
+});
+
 test("conversation mode patches matching app assets and records report entries", () => {
   withTempFeatureConfig(["conversation-mode"], (root) => {
     withLinuxFeatureRootEnv(root, () => {

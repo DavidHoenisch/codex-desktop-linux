@@ -129,12 +129,12 @@ function readAloudRuntimeSource() {
   ].join("");
 }
 
-function readAloudIconButtonSource(itemVar, copyVar, conversationVar, eventVar) {
-  return `(0,$.jsx)("button",{type:"button",className:"codex-linux-read-aloud-button",title:"Read assistant response aloud","aria-label":"Read assistant response aloud",onClick:${eventVar}=>{${eventVar}.stopPropagation(),globalThis.${HELPER_MARKER}?.(${itemVar},${copyVar},${conversationVar},${eventVar}.currentTarget)},children:(0,$.jsxs)("svg",{"aria-hidden":"true",viewBox:"0 0 24 24",className:"codex-linux-read-aloud-icon",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",children:[(0,$.jsx)("path",{d:"M11 5 6 9H3v6h3l5 4V5z"}),(0,$.jsx)("path",{d:"M15 9a5 5 0 0 1 0 6"}),(0,$.jsx)("path",{d:"M18 6a9 9 0 0 1 0 12"})]})})`;
+function readAloudIconButtonSource(jsxVar, itemVar, copyVar, conversationVar, eventVar) {
+  return `(0,${jsxVar}.jsx)("button",{type:"button",className:"codex-linux-read-aloud-button",title:"Read assistant response aloud","aria-label":"Read assistant response aloud",onClick:${eventVar}=>{${eventVar}.stopPropagation(),globalThis.${HELPER_MARKER}?.(${itemVar},${copyVar},${conversationVar},${eventVar}.currentTarget)},children:(0,${jsxVar}.jsxs)("svg",{"aria-hidden":"true",viewBox:"0 0 24 24",className:"codex-linux-read-aloud-icon",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",children:[(0,${jsxVar}.jsx)("path",{d:"M11 5 6 9H3v6h3l5 4V5z"}),(0,${jsxVar}.jsx)("path",{d:"M15 9a5 5 0 0 1 0 6"}),(0,${jsxVar}.jsx)("path",{d:"M18 6a9 9 0 0 1 0 12"})]})})`;
 }
 
-function readAloudButtonRowSource(itemVar, copyVar, conversationVar, eventVar) {
-  return `(0,$.jsx)("div",{className:"codex-linux-read-aloud-row",children:${readAloudIconButtonSource(itemVar, copyVar, conversationVar, eventVar)}})`;
+function readAloudButtonRowSource(jsxVar, itemVar, copyVar, conversationVar, eventVar) {
+  return `(0,${jsxVar}.jsx)("div",{className:"codex-linux-read-aloud-row",children:${readAloudIconButtonSource(jsxVar, itemVar, copyVar, conversationVar, eventVar)}})`;
 }
 
 function applyIndexRuntimePatch(source) {
@@ -153,11 +153,11 @@ function applyAssistantRenderPatch(source) {
     return source;
   }
   const jsxCallPattern =
-    /\(0,\$\.jsx\)\(([A-Za-z_$][\w$]*),\{item:([A-Za-z_$][\w$]*),([^{}]*?)assistantCopyText:([A-Za-z_$][\w$]*),([^{}]*?)conversationId:([A-Za-z_$][\w$]*),([^{}]*?)renderCodeBlocksAsWritingBlocks:([A-Za-z_$][\w$]*)\}\)/g;
+    /\(0,([A-Za-z_$][\w$]*)\.jsx\)\(([A-Za-z_$][\w$]*),\{item:([A-Za-z_$][\w$]*),([^{}]*?)assistantCopyText:([A-Za-z_$][\w$]*),([^{}]*?)conversationId:([A-Za-z_$][\w$]*),([^{}]*?)renderCodeBlocksAsWritingBlocks:([A-Za-z_$][\w$]*)\}\)/g;
   const patched = source.replace(
     jsxCallPattern,
-    (match, _component, itemVar, _beforeCopy, copyVar, _beforeConversation, conversationVar) =>
-      `(0,$.jsxs)($.Fragment,{children:[${match},${readAloudButtonRowSource(itemVar, copyVar, conversationVar, "e")}]})`,
+    (match, jsxVar, _component, itemVar, _beforeCopy, copyVar, _beforeConversation, conversationVar) =>
+      `(0,${jsxVar}.jsxs)(${jsxVar}.Fragment,{children:[${match},${readAloudButtonRowSource(jsxVar, itemVar, copyVar, conversationVar, "e")}]})`,
   );
   if (patched !== source) {
     return patched;
@@ -172,7 +172,7 @@ function applyAssistantRenderPatch(source) {
   }
   return source.replace(
     needle,
-    `(0,$.jsxs)($.Fragment,{children:[${needle},${readAloudButtonRowSource("e", "l", "n", "t")}]})`,
+    `(0,$.jsxs)($.Fragment,{children:[${needle},${readAloudButtonRowSource("$", "e", "l", "n", "t")}]})`,
   );
 }
 
