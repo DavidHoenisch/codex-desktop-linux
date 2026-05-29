@@ -331,6 +331,106 @@ function applySubagentNicknameMetadataPatch(currentSource) {
   return patchedSource;
 }
 
+function applyLocalEnvironmentActionModalDraftPatch(currentSource) {
+  if (currentSource.includes("codexLinuxActionDraft")) {
+    return currentSource;
+  }
+
+  if (
+    !currentSource.includes("settings.localEnvironments.actions.add.description") ||
+    !currentSource.includes("threadPage.runAction.setup.commandLabel") ||
+    !currentSource.includes("onUpdate:")
+  ) {
+    return currentSource;
+  }
+
+  const functionStart = currentSource.indexOf("function Cl(e){");
+  if (functionStart === -1) {
+    console.warn(
+      "WARN: Could not find local environment action modal component — skipping action input patch",
+    );
+    return currentSource;
+  }
+
+  const functionEnd = currentSource.indexOf("var wl=", functionStart);
+  if (functionEnd === -1) {
+    console.warn(
+      "WARN: Could not find local environment action modal component boundary — skipping action input patch",
+    );
+    return currentSource;
+  }
+
+  const beforeFunction = currentSource.slice(0, functionStart);
+  const afterFunction = currentSource.slice(functionEnd);
+  let patchedFunction = currentSource.slice(functionStart, functionEnd);
+  const stateNeedle = "workspaceRoot:u}=e,d=zt()";
+  const statePatch =
+    "workspaceRoot:u}=e,[codexLinuxActionDraft,codexLinuxSetActionDraft]=(0,Q.useState)(()=>n),codexLinuxUpdateActionDraft=e=>(codexLinuxSetActionDraft(t=>({...t,...e})),l(e)),d=zt()";
+  const requiredReplacements = [
+    {
+      needle: stateNeedle,
+      replacement: statePatch,
+      description: "draft state insertion point",
+    },
+    {
+      needle: "if(t[0]!==n||",
+      replacement: "if(t[0]!==codexLinuxActionDraft||t[0]!==n||",
+      description: "modal memo guard",
+    },
+    {
+      needle: "{...n,command:I,name:P}",
+      replacement: "{...codexLinuxActionDraft,command:I,name:P}",
+      description: "saved action payload",
+    },
+    {
+      needle: "n.icon",
+      replacement: "codexLinuxActionDraft.icon",
+      description: "icon draft references",
+    },
+    {
+      needle: "n.name",
+      replacement: "codexLinuxActionDraft.name",
+      description: "name draft references",
+    },
+    {
+      needle: "n.command",
+      replacement: "codexLinuxActionDraft.command",
+      description: "command draft references",
+    },
+    {
+      needle: "l({icon:e.value})",
+      replacement: "codexLinuxUpdateActionDraft({icon:e.value})",
+      description: "icon update callback",
+    },
+    {
+      needle: "l({name:e.target.value})",
+      replacement: "codexLinuxUpdateActionDraft({name:e.target.value})",
+      description: "name update callback",
+    },
+    {
+      needle: "l({command:e})",
+      replacement: "codexLinuxUpdateActionDraft({command:e})",
+      description: "command update callback",
+    },
+  ];
+
+  const missingReplacement = requiredReplacements.find(
+    ({ needle }) => !patchedFunction.includes(needle),
+  );
+  if (missingReplacement != null) {
+    console.warn(
+      `WARN: Could not find local environment action modal ${missingReplacement.description} — skipping action input patch`,
+    );
+    return currentSource;
+  }
+
+  for (const { needle, replacement } of requiredReplacements) {
+    patchedFunction = patchedFunction.replaceAll(needle, replacement);
+  }
+
+  return `${beforeFunction}${patchedFunction}${afterFunction}`;
+}
+
 function applyBrowserAnnotationScreenshotPatch(currentSource) {
   let patchedSource = currentSource;
 
@@ -783,6 +883,7 @@ module.exports = {
   applyLinuxAppSunsetPatch,
   applyLinuxOpaqueWindowsDefaultPatch,
   applyLinuxFastModeModelGuardPatch,
+  applyLocalEnvironmentActionModalDraftPatch,
   applySubagentNicknameMetadataPatch,
   patchCommentPreloadBundle,
 };
