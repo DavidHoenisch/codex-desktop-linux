@@ -2,12 +2,12 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { requireName } = require("../../scripts/patches/shared.js");
+const { linuxSettingsKeys, requireName } = require("../../scripts/patches/shared.js");
 
 const HANDLER_NAME = "codex-linux-wrapper-updater";
 const RUNTIME_VERSION = "codex-wrapper-updater-v2";
 const KEYBINDS_ASSET = "keybinds-settings-linux.js";
-const WRAPPER_UPDATES_SETTING_KEY = "codex-linux-wrapper-updates-enabled";
+const WRAPPER_UPDATES_SETTING_KEY = linuxSettingsKeys.wrapperUpdates;
 
 function warn(message, patchName) {
   console.warn(`WARN: ${message} - skipping ${patchName}`);
@@ -126,19 +126,69 @@ function applyWrapperUpdateSettingsPatch(source) {
   return next;
 }
 
+function applyWrapperUpdateGeneralSettingsPatch(source) {
+  if (source.includes("Check for Codex Desktop Linux updates")) {
+    return source;
+  }
+
+  const functionNeedle = "function Br(){";
+  if (!source.includes(functionNeedle)) {
+    throw new Error("could not find general power settings function");
+  }
+
+  const settingFunction =
+    `function CodexLinuxWrapperUpdatesSetting(){let[e,t]=(0,X.useState)(!1),[n,r]=(0,X.useState)(!0),[i,a]=(0,X.useState)(null),o=x();(0,X.useEffect)(()=>{let e=!0;return r(!0),N(\`get-global-state\`,{params:{key:${JSON.stringify(WRAPPER_UPDATES_SETTING_KEY)}}}).then(n=>{e&&(t(n?.value??!1),a(null))}).catch(t=>{e&&a(t instanceof Error?t.message:String(t))}).finally(()=>{e&&r(!1)}),()=>{e=!1}},[]);let s=(0,$.jsx)(w,{id:\`settings.general.wrapperUpdates.label\`,defaultMessage:\`Check for Codex Desktop Linux updates\`,description:\`Label for Linux wrapper update checks setting\`}),c=(0,$.jsx)(w,{id:\`settings.general.wrapperUpdates.description\`,defaultMessage:\`Check for Linux wrapper updates from codex-desktop-linux in addition to upstream Codex app updates.\`,description:\`Description for Linux wrapper update checks setting\`});i&&(c=(0,$.jsxs)(\`div\`,{className:\`flex flex-col gap-1\`,children:[c,(0,$.jsx)(\`span\`,{className:\`text-token-error-foreground\`,children:i})]}));let l=o.formatMessage({id:\`settings.general.wrapperUpdates.label\`,defaultMessage:\`Check for Codex Desktop Linux updates\`,description:\`Label for Linux wrapper update checks setting\`});return(0,$.jsx)(J,{label:s,description:c,control:(0,$.jsx)(q,{checked:e===!0,disabled:n,onChange:o=>{let s=e;t(o),a(null),N(\`set-global-state\`,{params:{key:${JSON.stringify(WRAPPER_UPDATES_SETTING_KEY)},value:o}}).catch(e=>{t(s),a(e instanceof Error?e.message:String(e))})},ariaLabel:l})})}`;
+
+  let next = source.replace(functionNeedle, `${settingFunction}${functionNeedle}`);
+
+  const powerRowNeedle = `D=(0,$.jsx)(K,{electron:!0,children:(0,$.jsx)(Br,{})})`;
+  const powerRowPatch =
+    `D=(0,$.jsx)(K,{electron:!0,children:(0,$.jsxs)($.Fragment,{children:[(0,$.jsx)(Br,{}),(0,$.jsx)(CodexLinuxWrapperUpdatesSetting,{})]})})`;
+  if (!next.includes(powerRowNeedle)) {
+    throw new Error("could not find general power settings row");
+  }
+  next = next.replace(powerRowNeedle, powerRowPatch);
+  return next;
+}
+
 function patchWrapperUpdateSettingsAssets(extractedDir) {
   try {
-    const filePath = path.join(extractedDir, "webview", "assets", KEYBINDS_ASSET);
-    if (!fs.existsSync(filePath)) {
-      return { matched: false, changed: 0, reason: `${KEYBINDS_ASSET} is not present` };
+    const assetsDir = path.join(extractedDir, "webview", "assets");
+    const keybindsPath = path.join(assetsDir, KEYBINDS_ASSET);
+    if (fs.existsSync(keybindsPath)) {
+      const current = fs.readFileSync(keybindsPath, "utf8");
+      const patched = applyWrapperUpdateSettingsPatch(current);
+      if (patched === current) {
+        return { matched: true, changed: 0 };
+      }
+      fs.writeFileSync(keybindsPath, patched, "utf8");
+      return { matched: true, changed: 1 };
     }
-    const current = fs.readFileSync(filePath, "utf8");
-    const patched = applyWrapperUpdateSettingsPatch(current);
-    if (patched === current) {
-      return { matched: true, changed: 0 };
+
+    const generalSettingsAssets = fs
+      .readdirSync(assetsDir)
+      .filter((name) => /^general-settings-.*\.js$/.test(name));
+    if (generalSettingsAssets.length === 0) {
+      return { matched: false, changed: 0, reason: `${KEYBINDS_ASSET} and general settings asset are not present` };
     }
-    fs.writeFileSync(filePath, patched, "utf8");
-    return { matched: true, changed: 1 };
+
+    let lastError = null;
+    for (const generalSettingsAsset of generalSettingsAssets) {
+      const generalPath = path.join(assetsDir, generalSettingsAsset);
+      const current = fs.readFileSync(generalPath, "utf8");
+      try {
+        const patched = applyWrapperUpdateGeneralSettingsPatch(current);
+        if (patched === current) {
+          return { matched: true, changed: 0 };
+        }
+        fs.writeFileSync(generalPath, patched, "utf8");
+        return { matched: true, changed: 1 };
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+      }
+    }
+
+    return { matched: false, changed: 0, reason: lastError ?? "could not patch general settings asset" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`WARN: Wrapper update settings patch skipped: ${message}`);
@@ -152,6 +202,7 @@ module.exports = {
   WRAPPER_UPDATES_SETTING_KEY,
   applyMainBundlePatch,
   applyWebviewRuntimePatch,
+  applyWrapperUpdateGeneralSettingsPatch,
   applyWrapperUpdateSettingsPatch,
   patchWrapperUpdateSettingsAssets,
   descriptors: [

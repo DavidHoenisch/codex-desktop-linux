@@ -9,7 +9,9 @@ const test = require("node:test");
 
 const {
   applyMainBundlePatch,
+  applyWrapperUpdateGeneralSettingsPatch,
   applyWrapperUpdateSettingsPatch,
+  patchWrapperUpdateSettingsAssets,
 } = require("./patch.js");
 const {
   enabledLinuxFeatureIds,
@@ -67,6 +69,42 @@ test("settings patch adds wrapper update toggle", () => {
   assert.match(patched, /wrapperUpdates:"codex-linux-wrapper-updates-enabled"/);
   assert.match(patched, /Check for Codex Desktop Linux updates/);
   assert.equal(applyWrapperUpdateSettingsPatch(patched), patched);
+});
+
+test("general settings patch adds wrapper update toggle for current upstream settings", () => {
+  const source =
+    `function $n(){let D,k,A,j,M;e[16]===Symbol.for(\`react.memo_cache_sentinel\`)?(D=(0,$.jsx)(K,{electron:!0,children:(0,$.jsx)(Br,{})}),k=(0,$.jsx)(zr,{}),A=(0,$.jsx)(Hn,{}),j=(0,$.jsx)(Mr,{}),M=(0,$.jsx)(Pr,{}),e[16]=D,e[17]=k,e[18]=A,e[19]=j,e[20]=M):(D=e[16],k=e[17],A=e[18],j=e[19],M=e[20]);}` +
+    `function Br(){return null}function Vr(e,t){return e}`;
+
+  const patched = applyWrapperUpdateGeneralSettingsPatch(source);
+
+  assert.match(patched, /CodexLinuxWrapperUpdatesSetting/);
+  assert.match(patched, /codex-linux-wrapper-updates-enabled/);
+  assert.match(patched, /Check for Codex Desktop Linux updates/);
+  assert.match(patched, /get-global-state/);
+  assert.match(patched, /set-global-state/);
+  assert.doesNotMatch(patched, /set-setting/);
+  assert.match(patched, /children:\[\(0,\$\.jsx\)\(Br,\{\}\),\(0,\$\.jsx\)\(CodexLinuxWrapperUpdatesSetting,\{\}\)\]/);
+  assert.equal(applyWrapperUpdateGeneralSettingsPatch(patched), patched);
+});
+
+test("settings asset patch skips re-exported general settings bundles", () => {
+  const appDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-wrapper-updater-settings-assets-"));
+  const assetsDir = path.join(appDir, "webview", "assets");
+  fs.mkdirSync(assetsDir, { recursive: true });
+  fs.writeFileSync(path.join(assetsDir, "general-settings-a.js"), `export{e as GeneralSettings};`);
+  fs.writeFileSync(
+    path.join(assetsDir, "general-settings-z.js"),
+    `function $n(){let D,k,A,j,M;e[16]===Symbol.for(\`react.memo_cache_sentinel\`)?(D=(0,$.jsx)(K,{electron:!0,children:(0,$.jsx)(Br,{})}),k=(0,$.jsx)(zr,{}),A=(0,$.jsx)(Hn,{}),j=(0,$.jsx)(Mr,{}),M=(0,$.jsx)(Pr,{}),e[16]=D,e[17]=k,e[18]=A,e[19]=j,e[20]=M):(D=e[16],k=e[17],A=e[18],j=e[19],M=e[20]);}function Br(){return null}`,
+  );
+
+  try {
+    assert.deepEqual(patchWrapperUpdateSettingsAssets(appDir), { matched: true, changed: 1 });
+    assert.doesNotMatch(fs.readFileSync(path.join(assetsDir, "general-settings-a.js"), "utf8"), /WrapperUpdates/);
+    assert.match(fs.readFileSync(path.join(assetsDir, "general-settings-z.js"), "utf8"), /Check for Codex Desktop Linux updates/);
+  } finally {
+    fs.rmSync(appDir, { recursive: true, force: true });
+  }
 });
 
 test("feature exposes optional patches and declarative apply hooks when enabled", () => {
