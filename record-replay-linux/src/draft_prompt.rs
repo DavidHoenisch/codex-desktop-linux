@@ -141,7 +141,7 @@ pub fn bundle_draft_prompt(bundle_dir: &Path) -> Result<String> {
         "draft_prompt",
         &manifest.files.draft_prompt,
     )?;
-    fs::write(&draft_path, &prompt)
+    crate::secure_fs::write_private_file(&draft_path, &prompt)
         .with_context(|| format!("failed to write draft prompt at {}", draft_path.display()))?;
     Ok(prompt)
 }

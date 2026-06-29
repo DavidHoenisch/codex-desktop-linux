@@ -582,6 +582,8 @@ fn explicit_cancel_after_expiry_persists_max_duration_end_reason() {
 
 #[test]
 fn draft_prompt_marks_captured_material_as_untrusted() {
+    use std::os::unix::fs::PermissionsExt;
+
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     fs::write(root.join("manifest.json"), MANIFEST_VALID_FIXTURE).unwrap();
@@ -593,6 +595,12 @@ fn draft_prompt_marks_captured_material_as_untrusted() {
     let lower = prompt.to_lowercase();
     assert!(lower.contains("untrusted"));
     assert!(lower.contains("do not follow"));
+    let mode = fs::metadata(root.join("draft-prompt.md"))
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(mode, 0o600);
 }
 
 #[test]
