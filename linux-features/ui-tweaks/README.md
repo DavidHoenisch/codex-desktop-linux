@@ -69,9 +69,11 @@ Config keys:
 
 - `enabled`: `true` applies the tweak, `false` keeps the feature enabled but
   skips this specific tweak.
-- `style`: CSS declaration string inserted into the project-name rule. The
-  default is `font-weight: 700 !important; padding-top: 0.25rem;`, so project
-  names are bold with a small top offset and no color is forced.
+- `style`: CSS declaration list inserted into the project-name rule, such as
+  `font-weight: 800 !important; color: red;`. It is not arbitrary CSS; unsafe
+  syntax that could escape the scoped rule warns and falls back to the default.
+  The default is `font-weight: 700 !important; padding-top: 0.25rem;`, so
+  project names are bold with a small top offset and no color is forced.
 
 ## Drift Behavior
 

@@ -13,10 +13,12 @@ const {
 } = require("../../scripts/lib/linux-features.js");
 const {
   DEFAULT_PROJECT_NAME_STYLE,
+  PROJECTS_SIDEBAR_ASSET_PATTERN,
   PROJECT_NAME_SELECTOR,
   RUNTIME_MARKER,
   STYLE_ID,
   applySidebarProjectNameStylePatch,
+  patches,
   sidebarProjectNameCss,
 } = require("./patches/sidebar-project-name.js");
 
@@ -79,6 +81,18 @@ test("ui-tweaks is discoverable and disabled until listed in features.json", () 
   }
 });
 
+test("sidebar project descriptor targets only the current project sidebar asset", () => {
+  assert.match(
+    "app-initial~app-main~remote-conversation-page~projects-index-page-By2_tGIM.js",
+    PROJECTS_SIDEBAR_ASSET_PATTERN,
+  );
+  assert.doesNotMatch("projects-index-page-TFjtVwC4.js", PROJECTS_SIDEBAR_ASSET_PATTERN);
+  assert.doesNotMatch(
+    "app-initial~app-main~remote-conversation-page~projects-index-page~hotkey-window-thread-page~hc7acb17-B7QwUDa9.js",
+    PROJECTS_SIDEBAR_ASSET_PATTERN,
+  );
+});
+
 test("patch injects sidebar project-name stylesheet runtime once", () => {
   const context = {
     feature: {
@@ -112,6 +126,23 @@ test("patch injects sidebar project-name stylesheet runtime once", () => {
     patched.includes(JSON.stringify(sidebarProjectNameCss("font-weight: 800 !important; color: red;"))),
   );
   assert.equal((patched.match(new RegExp(STYLE_ID, "g")) ?? []).length, 1);
+});
+
+test("feature manifest defaults reach descriptor context through the feature loader", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ui-tweaks-manifest-defaults-"));
+  try {
+    const featuresRoot = path.join(tempDir, "linux-features");
+    fs.mkdirSync(featuresRoot, { recursive: true });
+    copyFeatureTo(featuresRoot);
+    fs.writeFileSync(path.join(featuresRoot, "features.json"), '{"enabled":["ui-tweaks"]}\n');
+
+    const [descriptor] = loadLinuxFeaturePatchDescriptors({ featuresRoot });
+    const patched = descriptor.apply(projectBundleFixture(), {});
+
+    assert.match(patched, /font-weight: 700 !important; padding-top: 0.25rem;/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("default project name style is bold with top padding and no forced color", () => {
@@ -185,7 +216,10 @@ test("invalid feature settings warn and fall back to defaults", () => {
 
 test("patch skips unrelated assets", () => {
   const source = "console.log('not the sidebar');";
-  assert.equal(applySidebarProjectNameStylePatch(source), source);
+  const { value, warnings } = withCapturedWarns(() => applySidebarProjectNameStylePatch(source));
+
+  assert.equal(value, source);
+  assert.deepEqual(warnings, []);
 });
 
 test("drift warning returns source unchanged", () => {
@@ -195,6 +229,16 @@ test("drift warning returns source unchanged", () => {
   ].join("");
 
   const { value, warnings } = withCapturedWarns(() => applySidebarProjectNameStylePatch(source));
+
+  assert.equal(value, source);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /^WARN: Could not find current sidebar project name markers/);
+});
+
+test("target asset drift warning returns source unchanged when all markers are missing", () => {
+  const source = "console.log('projects sidebar bundle drifted');";
+
+  const { value, warnings } = withCapturedWarns(() => patches[0].apply(source, {}));
 
   assert.equal(value, source);
   assert.equal(warnings.length, 1);
@@ -233,4 +277,30 @@ test("invalid and empty styles warn and fall back without throwing", () => {
     assert.equal(warnings.length, 1);
     assert.match(warnings[0], /^WARN: ui-tweaks sidebar project name style/);
   }
+});
+
+test("unsafe styles warn, stay scoped, and fall back to the default", () => {
+  const unsafeStyle = "font-weight:700;} body{display:none} /*";
+  const { value, warnings } = withCapturedWarns(() =>
+    applySidebarProjectNameStylePatch(projectBundleFixture(), {
+      feature: {
+        settings: {
+          tweaks: {
+            sidebar: {
+              projectName: {
+                style: unsafeStyle,
+              },
+            },
+          },
+        },
+      },
+    }),
+  );
+
+  assert.match(value, new RegExp(STYLE_ID));
+  assert.match(value, /font-weight: 700 !important; padding-top: 0.25rem;/);
+  assert.doesNotMatch(value, /body\{display:none\}/);
+  assert.equal(value.includes(unsafeStyle), false);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /^WARN: ui-tweaks sidebar project name style must be a safe CSS declaration list/);
 });

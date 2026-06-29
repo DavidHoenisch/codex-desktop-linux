@@ -1,9 +1,12 @@
 "use strict";
 
 const DEFAULT_PROJECT_NAME_STYLE = "font-weight: 700 !important; padding-top: 0.25rem;";
+const PROJECTS_SIDEBAR_ASSET_PATTERN =
+  /^app-initial~app-main~remote-conversation-page~projects-index-page-[^.]+\.js$/;
 const PROJECT_NAME_SELECTOR = ".group\\/folder-row .min-w-0.truncate.pr-1";
 const STYLE_ID = "codex-linux-ui-tweaks-sidebar-project-name-style";
 const RUNTIME_MARKER = "codexLinuxUiTweaksSidebarProjectNameStyleRuntime";
+const UNSAFE_PROJECT_NAME_STYLE_PATTERN = /[{}@<>]|\r|\n|\/\*|\*\/|\burl\s*\(/i;
 
 const SIDEBAR_PROJECT_NAME_MARKERS = [
   "sidebarElectron.projectsNavLink",
@@ -28,6 +31,10 @@ function sidebarProjectNameStyleRuntimeSource(style = DEFAULT_PROJECT_NAME_STYLE
     `function install(){if(typeof document==="undefined")return;const target=document.head||document.documentElement;if(!target)return;let style=document.getElementById(STYLE_ID);if(style){style.textContent!==CSS&&(style.textContent=CSS);return}style=document.createElement("style");style.id=STYLE_ID;style.textContent=CSS;target.appendChild(style)}`,
     `document.readyState==="loading"&&document.addEventListener("DOMContentLoaded",install,{once:true});install();})();`,
   ].join("");
+}
+
+function isSafeProjectNameStyle(style) {
+  return !UNSAFE_PROJECT_NAME_STYLE_PATTERN.test(style);
 }
 
 function sidebarProjectNameConfig(context) {
@@ -60,6 +67,13 @@ function normalizedProjectNameStyle(context) {
     return { enabled: true, style: DEFAULT_PROJECT_NAME_STYLE };
   }
 
+  if (!isSafeProjectNameStyle(style)) {
+    console.warn(
+      "WARN: ui-tweaks sidebar project name style must be a safe CSS declaration list - using default bold style",
+    );
+    return { enabled: true, style: DEFAULT_PROJECT_NAME_STYLE };
+  }
+
   return { enabled: true, style };
 }
 
@@ -84,7 +98,7 @@ function applySidebarProjectNameStylePatch(source, context = {}) {
     }
 
     if (!looksLikeSidebarProjectBundle(source)) {
-      if (hasPartialSidebarProjectMarkers(source)) {
+      if (context.warnOnMissingMarkers === true || hasPartialSidebarProjectMarkers(source)) {
         warn("Could not find current sidebar project name markers");
       }
       return source;
@@ -103,15 +117,17 @@ const patches = [
     phase: "webview-asset",
     order: 20_790,
     ciPolicy: "optional",
-    pattern: /^(?:app-initial~app-main~remote-conversation-page~projects-index-page|projects-index-page).*\.js$/,
+    pattern: PROJECTS_SIDEBAR_ASSET_PATTERN,
     missingDescription: "projects sidebar bundle",
     skipDescription: "ui-tweaks sidebar project name style patch",
-    apply: applySidebarProjectNameStylePatch,
+    apply: (source, context = {}) =>
+      applySidebarProjectNameStylePatch(source, { ...context, warnOnMissingMarkers: true }),
   },
 ];
 
 module.exports = {
   DEFAULT_PROJECT_NAME_STYLE,
+  PROJECTS_SIDEBAR_ASSET_PATTERN,
   PROJECT_NAME_SELECTOR,
   RUNTIME_MARKER,
   STYLE_ID,
