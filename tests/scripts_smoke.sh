@@ -5551,7 +5551,7 @@ test_linux_tray_patch_smoke() {
     mkdir -p "$workspace"
     bundle_body="$(cat <<'JS'
 let D={removeMenu(){},setMenuBarVisibility(){},setIcon(){},once(){}};
-let n=require(`electron`),i=require(`node:path`),a=require(`node:fs`);
+let s=require(`node:url`),c=require(`electron`);c=e.o(c);let n=c,i=require(`node:path`),a=require(`node:fs`);
 let t={join(){},C:{Prod:`prod`},A(){}};
 let k={hide(){},isDestroyed(){return false}};
 let f=`local`;
