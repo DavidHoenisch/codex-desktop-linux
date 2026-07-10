@@ -405,9 +405,16 @@ test("runtime lock override blocks drag start", () => {
   const { controller } = controllerFromPatchedSource(patched, {
     process: { env: { CODEX_PET_OVERLAY_LOCK_POSITION: "1" } },
   });
+  controller.window = { isDestroyed: () => false, webContents: { id: 1 } };
+  controller.getLayout = () => ({ mascot: { left: 0, top: 0 } });
   controller.dragState = { preserved: true };
 
-  controller.startDrag(1, {});
+  controller.startDrag(1, {
+    pointerScreenX: 100,
+    pointerScreenY: 100,
+    pointerWindowX: 20,
+    pointerWindowY: 20,
+  });
 
   assert.deepEqual(JSON.parse(JSON.stringify(controller.dragState)), { preserved: true });
 });
@@ -515,7 +522,7 @@ test("targets only the unambiguous Hyprland pet window address", () => {
   });
 
   assert.equal(JSON.stringify(calls[0]), JSON.stringify(["clients", "-j"]));
-  assert.ok(calls.some((args) => args.join(" ").includes('hl.dsp.window.pin({ window = "address:0x200" })')));
+  assert.ok(calls.some((args) => args.join(" ").includes('hl.dsp.window.pin({ action = "on", window = "address:0x200" })')));
   assert.ok(calls.some((args) => args.join(" ").includes('prop = "decorate", value = "0", window = "address:0x200"')));
   assert.ok(calls.some((args) => args.join(" ").includes('prop = "no_shadow", value = "1", window = "address:0x200"')));
   assert.ok(calls.some((args) => args.join(" ").includes('hl.dsp.window.alter_zorder({ mode = "top", window = "address:0x200" })')));
@@ -621,6 +628,58 @@ test("locked Hyprland overlays move to the final desired bounds", () => {
   ));
 });
 
+test("legacy Hyprland fallbacks keep dispatcher arguments grouped", () => {
+  const calls = [];
+  const patched = applyPetOverlayPatch(currentAvatarOverlayBundleFixture(), {
+    feature: { manifest: { petOverlay: { lockPosition: true } }, settings: {} },
+  });
+  const { controller } = controllerFromPatchedSource(patched, {
+    process: { env: { XDG_CURRENT_DESKTOP: "Hyprland" } },
+    childProcess: {
+      execFile(_command, args, _options, callback) {
+        calls.push(args);
+        if (args[0] === "clients") {
+          callback(null, JSON.stringify([{
+            address: "0xbee",
+            at: [0, 0],
+            floating: true,
+            fullscreen: 0,
+            pid: 4242,
+            pinned: false,
+            size: [356, 320],
+            title: "Codex Pet Overlay",
+          }]));
+          return;
+        }
+        if (args[0] === "dispatch" && args[1]?.startsWith("hl.dsp.window.")) {
+          callback(new Error("Lua dispatcher unavailable"), "");
+          return;
+        }
+        callback(null, "ok");
+      },
+    },
+  });
+  const window = {
+    getBounds: () => ({ x: 0, y: 0, width: 356, height: 320 }),
+    isDestroyed: () => false,
+  };
+  controller.window = window;
+  controller.codexPetOverlayDesiredWindowBounds = { x: -179, y: -134, width: 356, height: 320 };
+
+  controller.codexPetOverlayApplyHyprlandHints(window);
+
+  assert.ok(calls.some((args) => JSON.stringify(args) === JSON.stringify([
+    "dispatch",
+    "movewindowpixel",
+    "exact -179 -134,address:0xbee",
+  ])));
+  assert.ok(calls.some((args) => JSON.stringify(args) === JSON.stringify([
+    "dispatch",
+    "alterzorder",
+    "top,address:0xbee",
+  ])));
+});
+
 test("Hyprland callbacks ignore stale overlay windows", () => {
   const calls = [];
   let clientsCallback;
@@ -702,6 +761,36 @@ test("hyprctl stops retrying after ENOENT", () => {
   controller.codexPetOverlayApplyHyprlandHints(window);
 
   assert.equal(JSON.stringify(calls), JSON.stringify([["clients", "-j"]]));
+});
+
+test("timed-out modern Hyprland dispatch does not run its legacy fallback", () => {
+  const calls = [];
+  const patched = applyPetOverlayPatch(currentAvatarOverlayBundleFixture());
+  const { controller } = controllerFromPatchedSource(patched, {
+    process: { env: { XDG_CURRENT_DESKTOP: "Hyprland" } },
+    childProcess: {
+      execFile(_command, args, _options, callback) {
+        calls.push(args);
+        const error = new Error("hyprctl timed out");
+        error.killed = true;
+        error.signal = "SIGTERM";
+        callback(error, "");
+      },
+    },
+  });
+
+  controller.codexPetOverlayHyprlandDispatch(
+    'hl.dsp.window.pin({ action = "on", window = "address:0xbee" })',
+    ["pin", "address:0xbee"],
+  );
+
+  assert.equal(
+    JSON.stringify(calls),
+    JSON.stringify([[
+      "dispatch",
+      'hl.dsp.window.pin({ action = "on", window = "address:0xbee" })',
+    ]]),
+  );
 });
 
 test("missing hyprctl does not dispatch compositor mutations", () => {
