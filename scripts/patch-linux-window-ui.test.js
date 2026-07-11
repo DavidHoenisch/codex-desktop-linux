@@ -4805,7 +4805,11 @@ test("keeps Linux desktop toggles visible with native Keyboard Shortcuts", () =>
     assert.match(linuxDesktopSource, /codex-linux-auto-update-on-exit/);
     assert.match(linuxDesktopSource, /import\{r as SettingsRow\}from"\.\/settings-row-A\.js"/);
     assert.match(linuxDesktopSource, /import\{z as __post\}from"\.\/shared-app-A\.js"/);
-    assert.match(linuxDesktopSource, /import\{t as Toggle\}from"\.\/toggle-A\.js"/);
+    assert.equal(fs.existsSync(path.join(assetsDir, "linux-settings-toggle-linux.js")), true);
+    assert.match(
+      linuxDesktopSource,
+      /import\{t as Toggle\}from"\.\/linux-settings-toggle-linux\.js"/,
+    );
     assert.doesNotMatch(linuxDesktopSource, /React\.use(State|Effect|Callback)/);
     assert.doesNotMatch(linuxDesktopSource, /function useLinuxSetting/);
     assert.match(linuxDesktopSource, /class LinuxToggle extends React\.Component/);
@@ -4976,7 +4980,7 @@ test("ignores settings row and toggle icon decoys from the current DMG", () => {
   }
 });
 
-test("infers the current upstream settings toggle from settings row controls", () => {
+test("does not import an upstream settings toggle with private lazy initialization", () => {
   const { extractedDir, assetsDir } = createModernNativeKeyboardShortcutsSettingsFixture();
   try {
     fs.rmSync(path.join(assetsDir, "toggle-A.js"));
@@ -4991,13 +4995,17 @@ test("infers the current upstream settings toggle from settings row controls", (
 
     assert.equal(result.matched, true);
     assert.deepEqual(warnings, []);
-    assert.equal(fs.existsSync(path.join(assetsDir, "linux-settings-toggle-linux.js")), false);
+    assert.equal(fs.existsSync(path.join(assetsDir, "linux-settings-toggle-linux.js")), true);
 
     const linuxDesktopSource = fs.readFileSync(
       path.join(assetsDir, linuxDesktopSettingsAsset),
       "utf8",
     );
-    assert.match(linuxDesktopSource, /import\{vn as Toggle\}from"\.\/shared-toggle-A\.js"/);
+    assert.match(
+      linuxDesktopSource,
+      /import\{t as Toggle\}from"\.\/linux-settings-toggle-linux\.js"/,
+    );
+    assert.doesNotMatch(linuxDesktopSource, /shared-toggle-A\.js/);
     assert.match(
       linuxDesktopSource,
       /control:\$\.jsx\(Toggle,\{checked:value,disabled:isLoading,onChange:this\.update,ariaLabel:label\}\)/,
@@ -5055,7 +5063,10 @@ test("adds Linux desktop settings when native shortcuts use a consolidated setti
     assert.match(linuxDesktopSource, /href:url/);
     assert.doesNotMatch(linuxDesktopSource, /Source commit URL/);
     assert.match(linuxDesktopSource, /import\{R as __reactFactory,I as __jsxFactory\}from"\.\/shared-runtime-A\.js"/);
-    assert.match(linuxDesktopSource, /import\{t as Toggle\}from"\.\/toggle-A\.js"/);
+    assert.match(
+      linuxDesktopSource,
+      /import\{t as Toggle\}from"\.\/linux-settings-toggle-linux\.js"/,
+    );
     assert.doesNotMatch(linuxDesktopSource, /function LinuxSwitch/);
 
     const settingsPageSource = fs.readFileSync(path.join(assetsDir, "settings-page-A.js"), "utf8");
@@ -5103,7 +5114,10 @@ test("adds Linux desktop settings when the lazy route map is hoisted into a sepa
       path.join(assetsDir, linuxDesktopSettingsAsset),
       "utf8",
     );
-    assert.match(linuxDesktopSource, /import\{t as Toggle\}from"\.\/toggle-A\.js"/);
+    assert.match(
+      linuxDesktopSource,
+      /import\{t as Toggle\}from"\.\/linux-settings-toggle-linux\.js"/,
+    );
     assert.doesNotMatch(linuxDesktopSource, /function LinuxSwitch/);
 
     // The icon/navigation bundle must reuse the general-settings icon for the new
