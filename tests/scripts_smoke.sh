@@ -4028,6 +4028,7 @@ SCRIPT
         XDG_RUNTIME_DIR="$runtime_dir" \
         CODEX_CLI_PATH=/bin/true \
         CODEX_WEBVIEW_PORT=45675 \
+        ELECTRON_RENDERER_URL="http://127.0.0.1:9999/" \
         ELECTRON_MARKER="$electron_marker" \
         "$app_dir/start.sh" >/dev/null 2>&1
     local rc=$?
@@ -4566,8 +4567,18 @@ source_path, output_path = sys.argv[1:3]
 source = open(source_path, encoding="utf-8").read()
 start = source.index("is_wsl_environment() {")
 end = source.index("configure_side_by_side_app_env() {")
-probe = "#!/usr/bin/env bash\n" + source[start:end] + r'''
+helpers = source[start:end].replace(
+    "is_wsl_environment() {",
+    "launcher_is_wsl_environment() {",
+    1,
+)
+probe = "#!/usr/bin/env bash\n" + helpers + r'''
 set -Eeuo pipefail
+
+is_wsl_environment() {
+    [ "${CODEX_TEST_ASSUME_NON_WSL:-0}" != "1" ] || return 1
+    launcher_is_wsl_environment
+}
 
 CODEX_LINUX_APP_ID="${CODEX_LINUX_APP_ID:-codex-desktop}"
 SCRIPT_DIR="${SCRIPT_DIR:-/tmp/codex-launcher-probe-app}"
@@ -4679,7 +4690,7 @@ EOF
     mkdir -p "$drm_stub_dir/card0-DP-2" "$drm_stub_dir/card0-HDMI-3"
     printf '%s\n' connected > "$drm_stub_dir/card0-DP-2/status"
     printf '%s\n' connected > "$drm_stub_dir/card0-HDMI-3/status"
-    output="$(env -i PATH="$PATH" HOME="$HOME" CODEX_DRM_CLASS_ROOT="$drm_stub_dir" DISPLAY=:0 XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=ubuntu:GNOME "$launcher_probe" probe)"
+    output="$(env -i PATH="$PATH" HOME="$HOME" CODEX_TEST_ASSUME_NON_WSL=1 CODEX_DRM_CLASS_ROOT="$drm_stub_dir" DISPLAY=:0 XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=ubuntu:GNOME "$launcher_probe" probe)"
     [[ "$output" == *"mode=gnome-wayland-multi-monitor"* && "$output" == *"<--ozone-platform=x11>"* ]] || fail "GNOME Wayland multi-monitor auto profile must force X11 for stable maximize/scale behavior: $output"
     [[ "$output" != *"<--ozone-platform-hint=auto>"* ]] || fail "GNOME Wayland multi-monitor auto profile must not leave backend selection to Electron: $output"
 
@@ -5001,10 +5012,8 @@ EOF
     assert_contains "$REPO_DIR/launcher/start.sh.template" "hydrate_graphical_session_env"
     assert_not_contains "$REPO_DIR/install.sh" "pkill -f \"http.server 5175\""
     assert_contains "$REPO_DIR/launcher/start.sh.template" "CODEX_WEBVIEW_PORT"
-    assert_contains "$REPO_DIR/launcher/start.sh.template" "CODEX_LINUX_PIN_RENDERER_URL"
     assert_contains "$REPO_DIR/launcher/start.sh.template" "CODEX_LINUX_ALLOW_RENDERER_URL_OVERRIDE"
     assert_contains "$REPO_DIR/launcher/start.sh.template" 'export ELECTRON_RENDERER_URL="$WEBVIEW_ORIGIN/"'
-    assert_contains "$REPO_DIR/launcher/start.sh.template" 'ELECTRON_RENDERER_URL="${ELECTRON_RENDERER_URL:-$WEBVIEW_ORIGIN/}"'
     assert_contains "$REPO_DIR/launcher/start.sh.template" '--app-id="$CODEX_LINUX_APP_ID"'
     assert_contains "$REPO_DIR/scripts/lib/process-detection.sh" "CODEX_APP_ID"
     assert_contains "$REPO_DIR/launcher/start.sh.template" 'ELECTRON_OZONE_HINT="auto"'
@@ -5475,10 +5484,8 @@ test_side_by_side_launcher_identity() {
     assert_contains "$app_dir/start.sh" 'CODEX_LINUX_SETTINGS_FILE="$APP_SETTINGS_FILE"'
     assert_contains "$app_dir/start.sh" 'export CODEX_HOME CODEX_LINUX_APP_ID CODEX_LINUX_APP_DISPLAY_NAME CODEX_LINUX_WEBVIEW_PORT CODEX_LINUX_SETTINGS_FILE CODEX_LINUX_FEATURES_DIR'
     assert_contains "$app_dir/start.sh" 'WEBVIEW_ORIGIN="http://127.0.0.1:$CODEX_LINUX_WEBVIEW_PORT"'
-    assert_contains "$app_dir/start.sh" "CODEX_LINUX_PIN_RENDERER_URL"
     assert_contains "$app_dir/start.sh" "CODEX_LINUX_ALLOW_RENDERER_URL_OVERRIDE"
     assert_contains "$app_dir/start.sh" 'export ELECTRON_RENDERER_URL="$WEBVIEW_ORIGIN/"'
-    assert_contains "$app_dir/start.sh" 'ELECTRON_RENDERER_URL="${ELECTRON_RENDERER_URL:-$WEBVIEW_ORIGIN/}"'
     assert_contains "$app_dir/start.sh" "resolve_script_dir"
     assert_contains "$app_dir/start.sh" "configure_side_by_side_app_env"
     assert_contains "$app_dir/start.sh" 'XDG_CONFIG_HOME="${CODEX_XDG_CONFIG_HOME:-$APP_STATE_DIR/xdg-config}"'

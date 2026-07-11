@@ -5,8 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- Nix module configurations can select the opt-in `mcp-helper-reaper`
+  feature. Its Rust helper is supplied by a reproducible Nix derivation and is
+  not added to the default package closure.
+
 ### Fixed
 
+- Linux settings search no longer shows unavailable macOS Dock icon controls or
+  Suggested prompts results that do not render in the generated Linux settings
+  page.
 - Read Aloud no longer crashes the generated Linux desktop settings page after
   its shared controls moved from React hooks to class components. The feature's
   enabled state, voice setup actions, and speech pace now use the same
