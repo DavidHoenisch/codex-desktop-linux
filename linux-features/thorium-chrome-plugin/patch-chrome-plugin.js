@@ -260,7 +260,6 @@ const defaultBrowserUserDataFallbackWithoutThorium = defaultBrowserUserDataFallb
 patchFileFirstMatch(path.join(scriptsDir, "installManifest.mjs"), {
   label: "Thorium native host manifest location",
   oldTexts: [
-    'linux:[".config/google-chrome/NativeMessagingHosts",".config/BraveSoftware/Brave-Browser/NativeMessagingHosts",".config/chromium/NativeMessagingHosts"]',
     'linux:[".config/google-chrome/NativeMessagingHosts",".config/google-chrome-beta/NativeMessagingHosts",".config/google-chrome-unstable/NativeMessagingHosts",".config/BraveSoftware/Brave-Browser/NativeMessagingHosts",".config/chromium/NativeMessagingHosts"]',
   ],
   newText:
@@ -310,7 +309,6 @@ patchFileFirstMatch(path.join(scriptsDir, "chrome-is-running.js"), {
   label: "Thorium running-process detection",
   oldTexts: [
     `  linux: new Set(["chrome", "google-chrome", "google-chrome-beta", "google-chrome-unstable", "brave", "brave-browser", "chromium", "chromium-browser"]),`,
-    `  linux: new Set(["chrome", "google-chrome", "brave", "brave-browser", "chromium", "chromium-browser"]),`,
   ],
   newText: `  linux: new Set(["chrome", "google-chrome", "google-chrome-beta", "google-chrome-unstable", "brave", "brave-browser", "chromium", "chromium-browser", "thorium", "thorium-browser", "thorium-browser-avx2"]),`,
   alreadyText: "thorium-browser-avx2",

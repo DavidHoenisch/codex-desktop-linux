@@ -146,6 +146,21 @@ test("Thorium settings patch extends the core Linux Chrome status helper", () =>
   assert.match(patched, /Google Chrome, Brave, Chromium, or Thorium is not installed/);
 });
 
+test("Thorium staging targets only the current core Chrome plugin shape", () => {
+  const source = fs.readFileSync(path.join(__dirname, "patch-chrome-plugin.js"), "utf8");
+
+  assert.doesNotMatch(
+    source,
+    /linux:\["\.config\/google-chrome\/NativeMessagingHosts","\.config\/BraveSoftware\/Brave-Browser\/NativeMessagingHosts","\.config\/chromium\/NativeMessagingHosts"\]/,
+  );
+  assert.doesNotMatch(
+    source,
+    /linux: new Set\(\["chrome", "google-chrome", "brave", "brave-browser", "chromium", "chromium-browser"\]\)/,
+  );
+  assert.match(source, /google-chrome-beta\/NativeMessagingHosts/);
+  assert.match(source, /"google-chrome-beta", "google-chrome-unstable"/);
+});
+
 test("Thorium stage hook upgrades a core Linux-patched Chrome plugin", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "codex-thorium-stage-"));
   try {
