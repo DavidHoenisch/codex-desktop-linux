@@ -5354,6 +5354,8 @@ if 'codex_run_host_command "$hook"' not in after_exit_hooks_body:
     raise SystemExit("launcher after-exit hooks must not inherit packaged LD_LIBRARY_PATH")
 if 'codex_exec_host_command "$@"' not in cli_probe_body:
     raise SystemExit("launcher CLI version probes must not inherit packaged LD_LIBRARY_PATH")
+if "CODEX_CLI_PROBE_STDERR_FILE" in source:
+    raise SystemExit("launcher CLI probes must not expose stderr redirection through inherited environment")
 if 'local require_success="${2:-0}"' not in cli_preflight_body:
     raise SystemExit("CLI preflight must support a required-success repair mode")
 if not re.search(r'elif codex_cli_missing_optional_dependency "\$CODEX_CLI_PATH"; then\s+if ! run_cli_preflight 0 1; then.*?exit 1.*?cli_preflight_repair_sync', runtime_body, re.S):
@@ -6296,6 +6298,11 @@ PY
     [ "$version_output" = "0.150.0" ] || fail "CLI version probe must read --version output, got $version_output"
     version_output="$(env -i PATH="$HOST_TOOL_PATH" HOME="$fake_home" "$launcher_probe" version "$fallback_version_cli")"
     [ "$version_output" = "0.151.0" ] || fail "CLI version probe must fall back to version output, got $version_output"
+
+    local inherited_stderr_target="$workspace/inherited-stderr-target"
+    version_output="$(env -i PATH="$HOST_TOOL_PATH" HOME="$fake_home" CODEX_CLI_PROBE_STDERR_FILE="$inherited_stderr_target" "$launcher_probe" version "$dash_version_cli")"
+    [ "$version_output" = "0.150.0" ] || fail "inherited probe environment must not affect version output"
+    [ ! -e "$inherited_stderr_target" ] || fail "inherited environment must not control CLI probe stderr files"
 
     local missing_x64_cli="$workspace/missing-x64-codex"
     local missing_arm64_cli="$workspace/missing-arm64-codex"

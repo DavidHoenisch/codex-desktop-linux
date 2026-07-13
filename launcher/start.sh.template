@@ -1672,9 +1672,9 @@ pid_parent_matches() {
 
 codex_cli_version_probe() {
     local output_file="$1"
-    shift
+    local stderr_file="$2"
+    shift 2
     local marker="${output_file}.timed-out"
-    local stderr_file="${CODEX_CLI_PROBE_STDERR_FILE:-/dev/null}"
     local probe_pid
     local watchdog_pid
     # Under command substitution, $$ stays the top-level launcher PID.
@@ -1735,7 +1735,7 @@ codex_cli_version() {
 
     for version_arg in --version version; do
         : > "$probe_file"
-        if codex_cli_version_probe "$probe_file" "$cli_path" "$version_arg"; then
+        if codex_cli_version_probe "$probe_file" /dev/null "$cli_path" "$version_arg"; then
             output="$(sed -n '1,3p' "$probe_file" 2>/dev/null || true)"
             version="$(printf '%s\n' "$output" | sed -nE '
 s/^v?([0-9]+([.][0-9]+)+(-[0-9A-Za-z.-]+)?([+][0-9A-Za-z.-]+)?)([^0-9A-Za-z._+-].*)?$/\1/p
@@ -1773,8 +1773,7 @@ codex_cli_missing_optional_dependency() {
         return 1
     }
 
-    if CODEX_CLI_PROBE_STDERR_FILE="$stderr_file" \
-        codex_cli_version_probe "$output_file" "$cli_path" --version; then
+    if codex_cli_version_probe "$output_file" "$stderr_file" "$cli_path" --version; then
         probe_status=0
     else
         probe_status=$?
