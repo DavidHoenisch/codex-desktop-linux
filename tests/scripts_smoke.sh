@@ -4649,6 +4649,26 @@ test_native_module_rebuild_accepts_prebuilt_source() {
     [ ! -f "$app_dir/node_modules/node-pty/build/Release/junk.o" ] || fail "Expected node-pty build junk to be pruned"
 }
 
+test_native_module_binding_validation_rejects_missing_binary() {
+    info "Checking native module validation rejects a missing binding"
+    local workspace="$TMP_DIR/native-module-binding-validation"
+    local output_log="$workspace/output.log"
+
+    mkdir -p "$workspace/node_modules/node-pty/build/Release"
+    : > "$workspace/node_modules/node-pty/build/Release/pty.node"
+
+    if (
+        error() { echo "[ERROR] $*" >&2; exit 1; }
+        # shellcheck disable=SC1091
+        source "$REPO_DIR/scripts/lib/native-modules.sh"
+        require_native_module_bindings "$workspace/node_modules"
+    ) > "$output_log" 2>&1; then
+        fail "Expected missing better-sqlite3 binding validation to fail"
+    fi
+
+    assert_contains "$output_log" "Required native binding missing: better-sqlite3"
+}
+
 test_bundled_plugin_builders_accept_prebuilt_binaries() {
     info "Checking bundled plugin builders accept prebuilt binaries"
     local workspace="$TMP_DIR/bundled-plugin-prebuilt-binaries"
@@ -10363,6 +10383,7 @@ main() {
     test_v8_nullptr_workaround_wraps_when_included_probe_fails
     test_native_module_rebuild_uses_local_electron_rebuild_toolchain
     test_native_module_rebuild_accepts_prebuilt_source
+    test_native_module_binding_validation_rejects_missing_binary
     test_bundled_plugin_builders_accept_prebuilt_binaries
     test_notification_actions_bridge_accepts_prebuilt_binary
     test_bundled_plugin_system_computer_use_preserves_cosmic_helper_name

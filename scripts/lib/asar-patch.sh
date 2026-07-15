@@ -106,6 +106,8 @@ patch_asar() {
     (cd app-extracted && find . -type f | LC_ALL=C sort | sed 's#^\./##') > "$WORK_DIR/app.asar.ordering"
     npx asar pack app-extracted app.asar --ordering "$WORK_DIR/app.asar.ordering" --unpack "{*.node,*.so,*.dylib}" 2>/dev/null
 
+    require_native_module_bindings "$WORK_DIR/app.asar.unpacked/node_modules"
+
     info "app.asar patched"
 }
 

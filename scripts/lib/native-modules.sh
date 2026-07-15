@@ -126,6 +126,15 @@ prune_native_module_build_artifacts() {
     find "$module_dir" -type f -name "*.target.mk" -delete 2>/dev/null || true
 }
 
+require_native_module_bindings() {
+    local modules_dir="$1"
+
+    [ -f "$modules_dir/better-sqlite3/build/Release/better_sqlite3.node" ] || \
+        error "Required native binding missing: better-sqlite3/build/Release/better_sqlite3.node"
+    [ -f "$modules_dir/node-pty/build/Release/pty.node" ] || \
+        error "Required native binding missing: node-pty/build/Release/pty.node"
+}
+
 apply_v8_nullptr_t_workaround_if_needed() {
     local build_dir="$1"
     local probe_source="$build_dir/.v8-nullptr-probe.cc"
@@ -241,6 +250,8 @@ build_native_modules() {
         "${native_build_env[@]}" \
         node "$build_dir/node_modules/@electron/rebuild/lib/cli.js" -v "$ELECTRON_VERSION" --force --dist-url "$ELECTRON_HEADERS_URL" "${electron_rebuild_mode_args[@]}" >&2
 
+    require_native_module_bindings "$build_dir/node_modules"
+
     info "Native modules built successfully"
 
     # Copy compiled modules back into extracted app
@@ -250,6 +261,7 @@ build_native_modules() {
     cp -r "$build_dir/node_modules/node-pty" "$app_extracted/node_modules/"
     prune_native_module_build_artifacts "$app_extracted/node_modules/better-sqlite3"
     prune_native_module_build_artifacts "$app_extracted/node_modules/node-pty"
+    require_native_module_bindings "$app_extracted/node_modules"
 }
 
 install_native_modules_from_source() {
@@ -281,6 +293,7 @@ install_native_modules_from_source() {
     chmod -R u+w "$app_extracted/node_modules/better-sqlite3" "$app_extracted/node_modules/node-pty"
     prune_native_module_build_artifacts "$app_extracted/node_modules/better-sqlite3"
     prune_native_module_build_artifacts "$app_extracted/node_modules/node-pty"
+    require_native_module_bindings "$app_extracted/node_modules"
 }
 
 # ---- Download Linux Electron ----
