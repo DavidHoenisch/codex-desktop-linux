@@ -122,12 +122,7 @@ pub async fn build_update_from(
     state.artifact_paths.workspace_dir = Some(workspace.workspace_dir.clone());
     state.save(&paths.state_file)?;
 
-    let feature_config = crate::config::effective_feature_config_path(config);
-    copy_builder_bundle(
-        bundle_source,
-        &workspace.bundle_dir,
-        feature_config.as_deref(),
-    )?;
+    copy_builder_bundle(bundle_source, &workspace.bundle_dir)?;
 
     state.status = UpdateStatus::PatchingApp;
     state.save(&paths.state_file)?;
@@ -151,7 +146,7 @@ pub async fn build_update_from(
     // writes it to a stable per-user path) so the rebuild stages exactly those
     // features. Only set it when the file actually exists; an absent path would
     // make linux-features.js see an empty enabled set and stage nothing.
-    if let Some(feature_config) = feature_config {
+    if let Some(feature_config) = crate::config::effective_feature_config_path(config) {
         install.env("CODEX_LINUX_FEATURES_CONFIG", &feature_config);
     }
     run_and_log(&mut install, &workspace.install_log)
@@ -251,11 +246,7 @@ fn package_build_script(bundle_dir: &Path) -> PathBuf {
     }
 }
 
-fn copy_builder_bundle(
-    source_root: &Path,
-    destination_root: &Path,
-    feature_config: Option<&Path>,
-) -> Result<()> {
+fn copy_builder_bundle(source_root: &Path, destination_root: &Path) -> Result<()> {
     let manifest_path = source_root.join(UPDATE_BUILDER_MANIFEST);
     if manifest_path.exists() {
         return copy_builder_bundle_from_manifest(source_root, destination_root, &manifest_path);
@@ -277,32 +268,7 @@ fn copy_builder_bundle(
         )?;
     }
 
-    if linux_feature_enabled_in_config(feature_config, "global-dictation") {
-        copy_entry(
-            &source_root.join("global-dictation-linux"),
-            &destination_root.join("global-dictation-linux"),
-            false,
-        )?;
-    }
-
     Ok(())
-}
-
-fn linux_feature_enabled_in_config(feature_config: Option<&Path>, feature_id: &str) -> bool {
-    let Some(feature_config) = feature_config else {
-        return false;
-    };
-    let Ok(contents) = fs::read_to_string(feature_config) else {
-        return false;
-    };
-    let Ok(config) = serde_json::from_str::<serde_json::Value>(&contents) else {
-        return false;
-    };
-
-    config
-        .get("enabled")
-        .and_then(serde_json::Value::as_array)
-        .is_some_and(|enabled| enabled.iter().any(|id| id.as_str() == Some(feature_id)))
 }
 
 fn copy_builder_bundle_from_manifest(
@@ -984,14 +950,19 @@ fi
         Ok(())
     }
 
-    fn write_fake_fallback_bundle(source_root: &Path) -> Result<()> {
+    #[test]
+    fn bundle_copy_skips_missing_optional_package_scripts() -> Result<()> {
+        let temp = tempdir()?;
+        let source_root = temp.path().join("source");
+        let destination_root = temp.path().join("destination");
+
         fs::create_dir_all(source_root.join("scripts/lib"))?;
         fs::create_dir_all(source_root.join("launcher"))?;
         fs::create_dir_all(source_root.join("packaging/linux"))?;
         fs::create_dir_all(source_root.join("assets"))?;
-        write_fake_computer_use_bundle(source_root)?;
-        write_fake_linux_features_bundle(source_root)?;
-        write_fake_patch_bundle(source_root)?;
+        write_fake_computer_use_bundle(&source_root)?;
+        write_fake_linux_features_bundle(&source_root)?;
+        write_fake_patch_bundle(&source_root)?;
         fs::write(source_root.join("install.sh"), b"#!/bin/bash\n")?;
         fs::write(
             source_root.join("launcher/cli-launch-path.py"),
@@ -1032,18 +1003,8 @@ fi
         )?;
         fs::write(source_root.join("assets/codex.png"), b"png")?;
         fs::write(source_root.join("assets/codex-linux.png"), b"linux png")?;
-        Ok(())
-    }
 
-    #[test]
-    fn bundle_copy_skips_missing_optional_package_scripts() -> Result<()> {
-        let temp = tempdir()?;
-        let source_root = temp.path().join("source");
-        let destination_root = temp.path().join("destination");
-
-        write_fake_fallback_bundle(&source_root)?;
-
-        copy_builder_bundle(&source_root, &destination_root, None)?;
+        copy_builder_bundle(&source_root, &destination_root)?;
 
         assert!(destination_root.join("scripts/build-deb.sh").exists());
         assert!(destination_root
@@ -1081,36 +1042,6 @@ fi
     }
 
     #[test]
-    fn fallback_bundle_copies_global_dictation_source_when_enabled() -> Result<()> {
-        let temp = tempdir()?;
-        let source_root = temp.path().join("source");
-        let destination_root = temp.path().join("destination");
-        let feature_config = temp.path().join("linux-features.json");
-
-        write_fake_fallback_bundle(&source_root)?;
-        fs::create_dir_all(source_root.join("global-dictation-linux/src"))?;
-        fs::write(
-            source_root.join("global-dictation-linux/Cargo.toml"),
-            b"[package]\nname = \"codex-global-dictation-linux\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-        )?;
-        fs::write(
-            source_root.join("global-dictation-linux/src/main.rs"),
-            b"fn main() {}\n",
-        )?;
-        fs::write(&feature_config, b"{\"enabled\":[\"global-dictation\"]}\n")?;
-
-        copy_builder_bundle(&source_root, &destination_root, Some(&feature_config))?;
-
-        assert!(destination_root
-            .join("global-dictation-linux/Cargo.toml")
-            .exists());
-        assert!(destination_root
-            .join("global-dictation-linux/src/main.rs")
-            .exists());
-        Ok(())
-    }
-
-    #[test]
     fn bundle_copy_prefers_packaged_update_builder_manifest() -> Result<()> {
         let temp = tempdir()?;
         let source_root = temp.path().join("source");
@@ -1131,7 +1062,7 @@ fi
             b"# generated\nassets/codex-linux.png\nrecord-replay-linux/Cargo.toml\n",
         )?;
 
-        copy_builder_bundle(&source_root, &destination_root, None)?;
+        copy_builder_bundle(&source_root, &destination_root)?;
 
         assert!(destination_root.join("assets/codex-linux.png").exists());
         assert!(destination_root
@@ -1151,7 +1082,7 @@ fi
         fs::create_dir_all(source_root.join(".codex-linux"))?;
         fs::write(source_root.join(UPDATE_BUILDER_MANIFEST), b"../escape\n")?;
 
-        let error = copy_builder_bundle(&source_root, &destination_root, None)
+        let error = copy_builder_bundle(&source_root, &destination_root)
             .expect_err("manifest parent path should be rejected");
         assert!(error
             .to_string()
@@ -1168,7 +1099,7 @@ fi
         fs::create_dir_all(source_root.join(".codex-linux"))?;
         fs::write(source_root.join(UPDATE_BUILDER_MANIFEST), b"/tmp/escape\n")?;
 
-        let error = copy_builder_bundle(&source_root, &destination_root, None)
+        let error = copy_builder_bundle(&source_root, &destination_root)
             .expect_err("manifest absolute path should be rejected");
         assert!(error
             .to_string()
